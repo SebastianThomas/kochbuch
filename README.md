@@ -1,6 +1,6 @@
 # kochbuch
 
-You can find this application [here](https://kochbuch.sthomas.com/).
+You can find this application [here](https://kochbuch.sthomas.ch/).
 
 This app is in fact a school project i began in 2020 and worked on since.
 
