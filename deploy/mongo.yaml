@@ -1,0 +1,62 @@
+---
+# MongoDB for kochbuch (the `recipes` DB, incl. GridFS images). Single instance,
+# local-path PVC on the Strato node. Restore the legacy dump into it once, after
+# the first deploy - see README.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kochbuch-db
+spec:
+  clusterIP: None            # headless; the app connects to kochbuch-db:27017
+  selector:
+    app: kochbuch-db
+  ports:
+    - port: 27017
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kochbuch-db
+spec:
+  serviceName: kochbuch-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kochbuch-db
+  template:
+    metadata:
+      labels:
+        app: kochbuch-db
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:8.0
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: root
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kochbuch-secrets
+                  key: mongo-root-password
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 640Mi }
+          livenessProbe:
+            exec: { command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"] }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 3Gi

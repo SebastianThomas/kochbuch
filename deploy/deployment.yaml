@@ -1,0 +1,50 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kochbuch
+  labels:
+    app: kochbuch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kochbuch
+  template:
+    metadata:
+      labels:
+        app: kochbuch
+    spec:
+      containers:
+        - name: kochbuch
+          image: ${APP_IMAGE}   # substituted by homelab-actions/kube-deploy
+          ports:
+            - containerPort: 5000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "5000"
+            - name: MONGO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kochbuch-secrets
+                  key: mongo-root-password
+            # built from the password above so there's one source of truth
+            - name: MONGO_URI
+              value: "mongodb://root:$(MONGO_ROOT_PASSWORD)@kochbuch-db:27017/recipes?authSource=admin"
+            - name: PUSH_PUBLIC_KEY
+              valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-public-key } }
+            - name: PUSH_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-private-key } }
+            - name: PUSH_SUBJECT
+              valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-subject } }
+          readinessProbe:
+            httpGet: { path: /, port: 5000 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: 5000 }
+            initialDelaySeconds: 20
+          resources:
+            requests: { cpu: 25m, memory: 96Mi }
+            limits: { memory: 256Mi }

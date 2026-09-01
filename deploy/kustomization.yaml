@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kochbuch
+
+# Applied by homelab-actions/kube-deploy on tag. `kochbuch-secrets` is created
+# separately by kube-secret (from GitHub Environment secrets) - see README.
+resources:
+  - namespace.yaml
+  - mongo.yaml
+  - deployment.yaml
+  - service.yaml
+  - httproute.yaml

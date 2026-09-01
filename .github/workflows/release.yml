@@ -1,0 +1,60 @@
+name: release
+run-name: "release ${{ github.ref_name }}"
+
+# Push a tag (v1.2.3) to build + deploy. workflow_dispatch against an existing
+# tag re-deploys it (rollback). Also pushes :latest so the legacy compose stack
+# keeps tracking the newest release until it's shut off.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image ref
+        run: echo "IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/kochbuch-sebastian:${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGE }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/kochbuch-sebastian:latest
+
+      - uses: SebastianThomas/homelab-actions/headscale-connect@v1
+        with:
+          auth-key: ${{ secrets.TS_AUTHKEY }}
+          login-server: ${{ secrets.HEADSCALE_URL }}
+          ping: kube-cp-01
+
+      - uses: SebastianThomas/homelab-actions/kube-secret@v1
+        with:
+          server: ${{ secrets.KUBE_API }}
+          ca: ${{ secrets.KUBE_CA }}
+          token: ${{ secrets.KUBE_TOKEN }}
+          namespace: kochbuch
+          name: kochbuch-secrets
+          literals: |
+            mongo-root-password=${{ secrets.MONGO_ROOT_PASSWORD }}
+            push-public-key=${{ secrets.PUSH_PUBLIC_KEY }}
+            push-private-key=${{ secrets.PUSH_PRIVATE_KEY }}
+            push-subject=${{ secrets.PUSH_SUBJECT }}
+
+      - uses: SebastianThomas/homelab-actions/kube-deploy@v1
+        with:
+          server: ${{ secrets.KUBE_API }}
+          ca: ${{ secrets.KUBE_CA }}
+          token: ${{ secrets.KUBE_TOKEN }}
+          namespace: kochbuch
+          image: ${{ env.IMAGE }}
