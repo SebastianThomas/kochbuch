@@ -103,7 +103,9 @@ export default {
   computed: { ...mapGetters(['user', 'loggedIn']) },
   data() {
     return {
-      item: {},
+      // null (not {}) so `v-if="item"` / `v-if="!item"` genuinely gate on
+      // "has the recipe loaded yet" instead of always being truthy.
+      item: null,
       error: '',
       message: '',
 
@@ -155,26 +157,19 @@ export default {
       });
     },
     deleteButtonClicked() {
-      this.$dialog
-        .confirm('Wollen Sie dieses Rezept wirklich löschen?', {
-          okText: 'Ja, Löschen!',
-          cancelText: 'Nein! Nicht Löschen!',
-          animation: 'zoom',
-        })
-        .then(() => {
-          const params = {
-            id: this.$route.params.id,
-            username: this.user.username,
-          };
-          this.$store.dispatch('deleteRecipe', params);
+      if (window.confirm('Wollen Sie dieses Rezept wirklich löschen?')) {
+        const params = {
+          id: this.$route.params.id,
+          username: this.user.username,
+        };
+        this.$store.dispatch('deleteRecipe', params);
 
-          this.$router.push({
-            name: 'BrowseRecipes',
-          });
-        })
-        .catch(() => {
-          this.error = 'Gute Entscheidung...';
+        this.$router.push({
+          name: 'BrowseRecipes',
         });
+      } else {
+        this.error = 'Gute Entscheidung...';
+      }
     },
     initColors() {
       switch (this.item.recipeType) {

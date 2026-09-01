@@ -1,134 +1,93 @@
+const crypto = require('crypto');
+const path = require('path');
+
 const express = require('express');
 const router = express.Router();
 
 const mongoose = require('mongoose');
-
-const path = require('path');
-
-const crypto = require('crypto');
 const multer = require('multer');
-const GridFsStorage = require('multer-gridfs-storage');
-const Grid = require('gridfs-stream');
 
 const push = require('../../push/push');
 
-// DB Config
-const db = process.env.MONGO_URI;
+const BUCKET_NAME = 'images';
+const bucket = () =>
+  new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+    bucketName: BUCKET_NAME,
+  });
 
-//Connect to DB
-mongoose.set('useUnifiedTopology', true);
+const upload = multer({ storage: multer.memoryStorage() });
 
-const conn = mongoose.createConnection(db, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
-
-// Init gfs
-let gfs;
-
-conn.once('open', () => {
-  //Init gfs
-  gfs = Grid(conn.db, mongoose.mongo);
-  gfs.collection('images');
-});
-
-// Create storage engine
-const storage = new GridFsStorage({
-  url: db,
-  options: { useNewUrlParser: true, useUnifiedTopology: true },
-  file: (req, file) => {
-    return new Promise((resolve, reject) => {
-      crypto.randomBytes(16, (err, buf) => {
-        if (err) {
-          reject(err);
-        } else {
-          const filename =
-            buf.toString('hex') + path.extname(file.originalname);
-          const fileInfo = {
-            filename,
-            bucketName: 'images',
-          };
-          resolve(fileInfo);
-        }
-      });
+const streamToBucket = (file) =>
+  new Promise((resolve, reject) => {
+    const filename = crypto.randomBytes(16).toString('hex') + path.extname(file.originalname);
+    const uploadStream = bucket().openUploadStream(filename, {
+      contentType: file.mimetype,
     });
-  },
-});
-const upload = multer({ storage });
+    uploadStream.on('error', reject);
+    uploadStream.on('finish', () => resolve({ filename }));
+    uploadStream.end(file.buffer);
+  });
 
 // @route   GET api/images
 // @desc    Get All Images
 // @access  Public
-router.get('/', (req, res) => {
-  gfs.files.find().toArray((err, files) => {
-    if (err) {
-      return res
-        .status(500)
-        .json({ error: 'Error while Grid().files.find().toArray()' });
-    } else {
-      return res.status(200).send(files);
-    }
-  });
+router.get('/', async (req, res) => {
+  const files = await bucket().find().toArray();
+  res.status(200).send(files);
 });
 
-// @route   GET api/images/:id
+// @route   GET api/images/image/:id
 // @desc    Get one Image
 // @access  Public
-router.get('/image/:id', (req, res) => {
-  gfs.files.findOne({ _id: req.params.id }, (err, file) => {
-    if (err)
-      return res
-        .status(500)
-        .json({ error: 'Fehler in Grid().files.findOne()' });
-    if (!file) {
-      return res.status(404).json({ error: 'File not found' });
-    } else {
-      // Check if file is image
-      if (
-        file.contentType.includes('image') ||
-        file.contentType.includes('img')
-      ) {
-        const readstream = gfs.createReadStream(file.id);
-        readstream.pipe(res);
-      } else {
-        return res.status(400).json({ error: 'File is not an image!' });
-      }
-    }
-  });
+router.get('/image/:id', async (req, res) => {
+  let objectId;
+  try {
+    objectId = new mongoose.Types.ObjectId(req.params.id);
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
+
+  const [file] = await bucket().find({ _id: objectId }).toArray();
+  if (!file) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  if (!/image|img/.test(file.contentType || '')) {
+    return res.status(400).json({ error: 'File is not an image!' });
+  }
+
+  res.set('Content-Type', file.contentType);
+  bucket()
+    .openDownloadStream(objectId)
+    .on('error', () => res.status(500).end())
+    .pipe(res);
 });
 
 // @route   GET api/images/image/name/:filename
 // @desc    Get one Image
 // @access  Public
-router.get('/image/name/:filename', (req, res) => {
-  gfs.files.findOne({ filename: req.params.filename }, (err, file) => {
-    if (err)
-      return res
-        .status(500)
-        .json({ error: 'Fehler in Grid().files.findOne()' });
-    if (!file) {
-      return res.status(404).json({ error: 'File not found' });
-    } else {
-      // Check if file is image
-      if (
-        file.contentType.includes('image') ||
-        file.contentType.includes('img')
-      ) {
-        const readstream = gfs.createReadStream(file._id);
-        readstream.pipe(res);
-      } else {
-        return res.status(400).json({ error: 'File is not an image!' });
-      }
-    }
-  });
+router.get('/image/name/:filename', async (req, res) => {
+  const [file] = await bucket().find({ filename: req.params.filename }).toArray();
+  if (!file) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  if (!/image|img/.test(file.contentType || '')) {
+    return res.status(400).json({ error: 'File is not an image!' });
+  }
+
+  res.set('Content-Type', file.contentType);
+  bucket()
+    .openDownloadStreamByName(req.params.filename)
+    .on('error', () => res.status(500).end())
+    .pipe(res);
 });
 
-router.post('/', upload.single('file'), (req, res) => {
+router.post('/', upload.single('file'), async (req, res) => {
+  const file = await streamToBucket(req.file);
   push.sendPushForEachToImage(
-    `Ein neues Bild (Name: ${req.file.filename}) wurde hochgeladen. `,
-    req.file.filename,
+    `Ein neues Bild (Name: ${file.filename}) wurde hochgeladen. `,
+    file.filename,
   );
-  res.json({ file: req.file });
+  res.json({ file });
 });
 
 module.exports = router;

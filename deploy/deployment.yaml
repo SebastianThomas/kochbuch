@@ -39,7 +39,14 @@ spec:
               valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-private-key } }
             - name: PUSH_SUBJECT
               valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-subject } }
-            # SMTP for /api/send (Gmail by default; host/port overridable here)
+            # SMTP for /api/send - custom mailbox, not a public/secret value so
+            # it lives here rather than in kochbuch-secrets. EDIT MAIL_HOST for
+            # your provider; MAIL_PORT/MAIL_SECURE default to implicit TLS :465
+            # (set MAIL_PORT "587" and add MAIL_SECURE "false" for STARTTLS).
+            - name: MAIL_HOST
+              value: "ha01s012.org-dns.com"
+            - name: MAIL_PORT
+              value: "465"
             - name: MAIL_USER
               valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: mail-user } }
             - name: MAIL_PASS

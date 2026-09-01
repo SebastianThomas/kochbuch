@@ -4,7 +4,7 @@
       <tr>
         <td v-if="showImages" style="min-width: fit-content;" :width="imgWidth">
           <img
-            src="/api/icons/icon/name/7a12730c7c8432cef48a6ba59d989dac.png"
+            :src="'/api/icons/icon/name/7a12730c7c8432cef48a6ba59d989dac.png'"
             alt="Ein Kochtopf"
             width="100%"
             id="img_kochtopf"
@@ -27,7 +27,7 @@
         </td>
         <td v-if="showImages" style="min-width: fit-content;" :width="imgWidth">
           <img
-            src="/api/icons/icon/name/0895f35d11c37cad72b0ba6634064842.png"
+            :src="'/api/icons/icon/name/0895f35d11c37cad72b0ba6634064842.png'"
             alt="Eine Kochmütze"
             width="100%"
             id="img_muetze"

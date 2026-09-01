@@ -6,9 +6,6 @@ const url = '/api/images/'
 class ImageService {
   static checkContains(string, toCheck) {
     const toCheckStrings = toCheck.split('+')
-    let contained = false
-
-    contained = false
 
     for (let i = 0; i < toCheckStrings.length; i += 1) {
       const toCheckString = toCheckStrings[i]
@@ -16,9 +13,7 @@ class ImageService {
         const toCheckStringLowerCase = toCheckString.toLowerCase()
         const stringLowerCase = string.toLowerCase()
 
-        contained = stringLowerCase.includes(toCheckStringLowerCase)
-
-        if (contained === false) {
+        if (!stringLowerCase.includes(toCheckStringLowerCase)) {
           return false
         }
       }

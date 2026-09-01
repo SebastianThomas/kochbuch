@@ -1,5 +1,4 @@
-import Vue from 'vue';
-import VueRouter from 'vue-router';
+import { createRouter, createWebHashHistory } from 'vue-router';
 
 import Home from '../views/Home.vue';
 
@@ -34,8 +33,6 @@ import ShoppingList from '../components/shopping/ShoppingList.vue';
 import SendList from '../components/email/SendList.vue';
 
 import Backend from '../Backend.vue';
-
-Vue.use(VueRouter);
 
 const routes = [
   {
@@ -167,12 +164,13 @@ const routes = [
   },
 ];
 
-const router = new VueRouter({
+const router = createRouter({
+  history: createWebHashHistory(),
   routes,
 });
 
 router.beforeEach((to, from, next) => {
-  if (from.name !== null) {
+  if (from.name != null) {
     document.documentElement.style.setProperty('--color1', '008, 126, 126, 1');
     document.documentElement.style.setProperty('--color2', '102, 228, 228, 1');
     document.documentElement.style.setProperty('--textColor', '#2c3e50');

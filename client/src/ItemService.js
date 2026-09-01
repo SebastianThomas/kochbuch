@@ -5,9 +5,6 @@ const url = '/api/items/';
 class ItemService {
   static checkContains(string, toCheck) {
     const toCheckStrings = toCheck.split('+');
-    let contained = false;
-
-    contained = false;
 
     for (let i = 0; i < toCheckStrings.length; i += 1) {
       const toCheckString = toCheckStrings[i];
@@ -15,9 +12,7 @@ class ItemService {
         const toCheckStringLowerCase = toCheckString.toLowerCase();
         const stringLowerCase = string.toLowerCase();
 
-        contained = stringLowerCase.includes(toCheckStringLowerCase);
-
-        if (contained === false) {
+        if (!stringLowerCase.includes(toCheckStringLowerCase)) {
           return false;
         }
       }
@@ -29,7 +24,6 @@ class ItemService {
     const toCheckStrings = toCheck.split('+');
     let contained = false;
 
-    contained = false;
     for (let i = 0; i < toCheckStrings.length; i += 1) {
       const toCheckString = toCheckStrings[i];
       if (toCheckString !== '+') {

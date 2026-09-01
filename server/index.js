@@ -1,8 +1,9 @@
+const path = require('path');
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
-const passport = require('passport');
 require('dotenv').config({ quiet: true });
 
 const items = require('./routes/api/items');
@@ -22,15 +23,9 @@ const db = process.env.MONGO_URI;
 
 //Connect to DB
 mongoose
-  .connect(db, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(db)
   .then(() => console.log('MongoDB Connected'))
   .catch((err) => console.log(err));
-
-// Passport Config
-require('./config/passport')(passport);
-
-app.use(passport.initialize());
-app.use(passport.session());
 
 // Use routes
 app.use('/api/items', items);
@@ -43,10 +38,11 @@ app.use('/api/subscribe', subscribe);
 
 // Handle production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(__dirname + '/public/'));
+  const publicDir = path.join(__dirname, 'public');
+  app.use(express.static(publicDir));
 
-  // Handle Single Page Application
-  app.get(/.*/, (req, res) => res.sendFile(__dirname + '/public/index.html'));
+  // Handle Single Page Application (catch-all, after every other route/asset)
+  app.use((req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 }
 
 const port = process.env.PORT || 5000;

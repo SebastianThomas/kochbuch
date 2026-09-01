@@ -4,8 +4,6 @@ const url = '/api/send/';
 
 class SendEmail {
   static async send(address, subject, content) {
-    let worked = false;
-
     try {
       const request = await axios.post(`${url}plain`, {
         address,
@@ -13,21 +11,15 @@ class SendEmail {
         content,
       });
 
-      if (request.status >= 200 && request.status < 300) {
-        worked = true;
-      }
-
-      return worked;
+      return request.status >= 200 && request.status < 300;
     } catch (err) {
       console.log('err: ');
       console.log(err);
-      return err;
+      return false;
     }
   }
 
   static async sendHTML(address, subject, htmlContent) {
-    let worked = false;
-
     try {
       const request = await axios.post(`${url}html`, {
         address,
@@ -35,15 +27,11 @@ class SendEmail {
         htmlContent,
       });
 
-      if (request.status >= 200 && request.status < 300) {
-        worked = true;
-      }
-
-      return worked;
+      return request.status >= 200 && request.status < 300;
     } catch (err) {
       console.log('err: ');
       console.log(err);
-      return err;
+      return false;
     }
   }
 }

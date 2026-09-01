@@ -1,9 +1,10 @@
 import pdfMake from 'pdfmake/build/pdfmake'
 import vfsFonts from 'pdfmake/build/vfs_fonts'
 
+pdfMake.addVirtualFileSystem(vfsFonts)
+
 class PDFUtils {
   static createPdfForRecipe(item) {
-    pdfMake.vfs = vfsFonts.pdfMake.vfs
 
     const ingred = [
       [

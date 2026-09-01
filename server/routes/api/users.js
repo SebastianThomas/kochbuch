@@ -1,78 +1,89 @@
 const express = require('express');
 const router = express.Router();
-const expressValidator = require('express-validator');
-const passport = require('passport');
-
-router.use(expressValidator());
-
-const push = require('../../push/push');
-
+const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 
-// Middleware to use req.checkBody()
-// router.use(expressValidator());
+const push = require('../../push/push');
 
 // User Model
 const User = require('../../models/User');
 
+const hashPassword = (password) => bcrypt.hash(password, 10);
+
+// Replace `oldUser`'s mutable fields with `patch`, save, and respond. Keeps
+// the "username must not change" guard the old callback code had.
+const applyUserPatch = async (res, oldUser, patch) => {
+  if (patch.username !== oldUser.username) {
+    return res
+      .status(405)
+      .json({ success: false, error: 'The username has changed..?' });
+  }
+
+  const updatedDoc = await User.findByIdAndUpdate(oldUser._id, patch, {
+    new: true,
+  });
+  return res.status(200).json(updatedDoc);
+};
+
 // @route   GET api/users
 // @desc    Get All Users
 // @access  Public
-router.get('/', (req, res) => {
-  User.find()
-    .sort({ date: 1 }) // Oldest at the top
-    .then((users) => res.json(users));
+router.get('/', async (req, res) => {
+  const users = await User.find().sort({ date: 1 }); // Oldest at the top
+  res.json(users);
 });
 
 // @route   GET api/users/:id
 // @desc    Get one User
 // @access  Public
-router.get('/:id', (req, res) => {
-  User.findById(req.params.id).then((users) => res.json(users));
+router.get('/:id', async (req, res) => {
+  const user = await User.findById(req.params.id);
+  res.json(user);
 });
 
-router.post(
-  '/login',
-  (req, res, next) => {
-    console.log(`Login try for ${req.body.username}`);
-    next();
-  },
-  (req, res, next) => {
-    passport.authenticate('local', (err, user, info) => {
-      if (err) {
-        return next(err);
-      }
-      if (!user) {
-        console.log(
-          `Login try for ${req.body.username} failed: ${info.message}`,
-        );
-        return res.status(401).send(info);
-      }
-      req.logIn(user, (err) => {
-        if (err) {
-          return next(err);
-        }
-        console.log(`Login try for ${req.body.username} successfull`);
-        return res.status(200).send(user);
-      });
-    })(req, res, next);
-  },
-);
+// @route   POST api/users/login
+// @desc    Check username/password and return the user
+// @access  Public
+router.post('/login', async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    console.log(`Login try for ${username}`);
+
+    const user = await User.findOne({ username });
+    const match = user && (await bcrypt.compare(password, user.password));
+
+    if (!match) {
+      console.log(`Login try for ${username} failed`);
+      return res.status(401).json({ message: 'No user found' });
+    }
+
+    console.log(`Login try for ${username} successfull`);
+    return res.status(200).json(user);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // @route   POST api/users
 // @desc    Create new User
 // @access  Public
-router.post('/', (req, res) => {
-  const username = req.body.username;
-  const password1 = req.body.password1;
-  const password2 = req.body.password2;
-  const description = req.body.description;
-  const favorites = req.body.favorites;
+router.post(
+  '/',
+  body('username').notEmpty().withMessage('Username is required!'),
+  body('password1').notEmpty().withMessage('Password1 is required!'),
+  body('password2').custom((value, { req }) => value === req.body.password1)
+    .withMessage('Passwords do not match!'),
+  async (req, res) => {
+    const { username, password1, password2, description, favorites } =
+      req.body;
 
-  User.find().then((users) => {
-    const filtered = users.filter((user) => user.username === username);
-    const exists = typeof filtered !== 'undefined' && filtered.length > 0;
+    const errors = validationResult(req).array({ onlyFirstError: true });
+    if (errors.length) {
+      console.log(errors);
+      return res.status(400).json({ success: false, errors });
+    }
 
+    const exists = await User.exists({ username });
     if (exists) {
       return res.status(400).json({
         success: false,
@@ -80,327 +91,136 @@ router.post('/', (req, res) => {
       });
     }
 
-    req.checkBody('username', 'Username is required!').notEmpty();
-    req.checkBody('password1', 'Password1 is required!').notEmpty();
-    req
-      .checkBody('password2', 'Passwords do not match!')
-      .equals(req.body.password1);
-
-    const errors = req.validationErrors();
-
-    if (!errors) {
+    try {
       const newUser = new User({
         username,
-        password: password1,
+        password: await hashPassword(password1),
         description,
         favorites,
       });
 
-      bcrypt.genSalt(10, (err, salt) => {
-        if (err) {
-          return res.status(500).json({
-            success: false,
-            errors:
-              'Server internal error while generating salt for password, please try again!',
-          });
-        } else {
-          bcrypt.hash(newUser.password, salt, (err, hash) => {
-            if (err) {
-              return res.status(500).json({
-                success: false,
-                errors:
-                  'Server internal error while hashing password, please try again!',
-              });
-            } else {
-              newUser.password = hash;
-
-              newUser
-                .save()
-                .then((user) => {
-                  push.sendPushForEachToUser(
-                    `Der Benutzer ${user.username} hat sich registriert! Herzlich Willkommen!`,
-                    user.username,
-                  );
-                  return res.status(201).json(user);
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    success: false,
-                    errors: err,
-                  });
-                });
-            }
-          });
-        }
-      });
-    } else {
-      console.log(errors);
-      return res.status(400).json({ success: false, errors: errors });
+      const user = await newUser.save();
+      push.sendPushForEachToUser(
+        `Der Benutzer ${user.username} hat sich registriert! Herzlich Willkommen!`,
+        user.username,
+      );
+      return res.status(201).json(user);
+    } catch (err) {
+      return res.status(500).json({ success: false, errors: err });
     }
+  },
+);
+
+router.patch('/:id', async (req, res) => {
+  if (req.body.password1 !== req.body.password2) {
+    return res
+      .status(405)
+      .json({ success: false, err: 'The two passwords do not match!' });
+  }
+
+  const oldUser = await User.findById(req.params.id);
+  await applyUserPatch(res, oldUser, {
+    username: oldUser.username,
+    password: await hashPassword(req.body.password1),
+    description: req.body.description,
+    favorites: oldUser.favorites,
   });
 });
 
-router.patch('/:id', (req, res) => {
+router.patch('/:id/password', async (req, res) => {
   if (req.body.password1 !== req.body.password2) {
-    res
+    return res
       .status(405)
       .json({ success: false, err: 'The two passwords do not match!' });
-  } else {
-    User.findById(req.params.id).then((oldUser) => {
-      const newUser = new User({
-        username: oldUser.username,
-        password: req.body.password1,
-        description: req.body.description,
-        favorites: oldUser.favorites,
-      });
-
-      if (newUser.username === oldUser.username) {
-        bcrypt.genSalt(10, (err, salt) => {
-          if (err) {
-            return res.status(500).json({
-              success: false,
-              errors:
-                'Server internal error while generating salt for password, please try again!',
-            });
-          } else {
-            bcrypt.hash(newUser.password, salt, (err, hash) => {
-              if (err) {
-                return res.status(500).json({
-                  success: false,
-                  errors:
-                    'Server internal error while hashing password, please try again!',
-                });
-              } else {
-                newUser.password = hash;
-
-                const upsertData = newUser.toObject();
-                delete upsertData._id;
-
-                User.updateOne(
-                  { _id: req.params.id },
-                  upsertData,
-                  { upsert: false },
-                  (err, updatedDoc) => {
-                    if (err) return res.status(500).json({ error: err });
-                    return res.status(200).json(updatedDoc);
-                  },
-                ).catch((err) => {
-                  throw err;
-                });
-              }
-            });
-          }
-        });
-      } else {
-        res
-          .status(405)
-          .json({ success: false, error: 'The username has changed..?' });
-      }
-    });
   }
-});
 
-router.patch('/:id/password', (req, res) => {
-  if (req.body.password1 !== req.body.password2) {
-    res
-      .status(405)
-      .json({ success: false, err: 'The two passwords do not match!' });
-  } else {
-    User.findById(req.params.id).then((oldUser) => {
-      const newUser = new User({
-        username: oldUser.username,
-        password: req.body.password1,
-        description: oldUser.description,
-        favorites: oldUser.favorites,
-      });
-
-      if (newUser.username === oldUser.username) {
-        bcrypt.genSalt(10, (err, salt) => {
-          if (err) {
-            return res.status(500).json({
-              success: false,
-              errors:
-                'Server internal error while generating salt for password, please try again!',
-            });
-          } else {
-            bcrypt.hash(newUser.password, salt, (err, hash) => {
-              if (err) {
-                return res.status(500).json({
-                  success: false,
-                  errors:
-                    'Server internal error while hashing password, please try again!',
-                });
-              } else {
-                newUser.password = hash;
-
-                const upsertData = newUser.toObject();
-                delete upsertData._id;
-
-                User.updateOne(
-                  { _id: req.params.id },
-                  upsertData,
-                  { upsert: false },
-                  (err, updatedDoc) => {
-                    if (err) return res.status(500).json({ error: err });
-                    return res.status(200).json(updatedDoc);
-                  },
-                ).catch((err) => {
-                  throw err;
-                });
-              }
-            });
-          }
-        });
-      } else {
-        res
-          .status(405)
-          .json({ success: false, error: 'The username has changed..?' });
-      }
-    });
-  }
-});
-
-router.patch('/:id/description', (req, res) => {
-  User.findById(req.params.id).then((oldUser) => {
-    const newUser = new User({
-      username: oldUser.username,
-      password: oldUser.password,
-      description: req.body.description,
-      favorites: oldUser.favorites,
-    });
-
-    if (newUser.username === oldUser.username) {
-      const upsertData = newUser.toObject();
-      delete upsertData._id;
-
-      User.updateOne(
-        { _id: req.params.id },
-        upsertData,
-        { upsert: false },
-        (err, updatedDoc) => {
-          if (err) return res.status(500).json({ error: err });
-          return res.status(200).json(updatedDoc);
-        },
-      ).catch((err) => {
-        throw err;
-      });
-    } else {
-      res
-        .status(405)
-        .json({ success: false, error: 'The username has changed..?' });
-    }
+  const oldUser = await User.findById(req.params.id);
+  await applyUserPatch(res, oldUser, {
+    username: oldUser.username,
+    password: await hashPassword(req.body.password1),
+    description: oldUser.description,
+    favorites: oldUser.favorites,
   });
 });
 
-router.patch('/favorite/:id', (req, res) => {
-  User.findById(req.params.id)
-    .then((user) => {
-      const newUser = new User({
-        username: user.username,
-        password: user.password,
-        description: user.description,
-        favorites: user.favorites,
-      });
-
-      if (newUser.favorites.includes(req.body.recipeId.toString())) {
-        return res.status(400).json({
-          success: false,
-          err: `${req.body.recipeId.toString()} is already a favourite!`,
-        });
-      } else {
-        newUser.favorites.push(req.body.recipeId.toString());
-      }
-      newUser.favorites = newUser.favorites.filter((el) => el !== '');
-
-      const upsertData = newUser.toObject();
-
-      delete upsertData._id;
-
-      try {
-        User.updateOne(
-          { _id: req.params.id },
-          upsertData,
-          { upsert: true },
-          (err, updatedDoc) => {
-            if (err) return res.status(500).send({ error: err });
-            return res.status(200).json({ success: true, user: updatedDoc });
-          },
-        ).catch((err) => {
-          throw err;
-        });
-      } catch (err) {
-        res.status(500).json({ success: false, error: err });
-      }
-    })
-    .catch((err) => {
-      res.status(400).json({ success: false, error: err });
-    });
+router.patch('/:id/description', async (req, res) => {
+  const oldUser = await User.findById(req.params.id);
+  await applyUserPatch(res, oldUser, {
+    username: oldUser.username,
+    password: oldUser.password,
+    description: req.body.description,
+    favorites: oldUser.favorites,
+  });
 });
 
-router.patch('/removeFavorite/:id', (req, res) => {
-  User.findById(req.params.id)
-    .then((user) => {
-      const newUser = new User({
-        username: user.username,
-        password: user.password,
-        description: user.description,
-        favorites: user.favorites,
+router.patch('/favorite/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    const recipeId = req.body.recipeId.toString();
+
+    if (user.favorites.includes(recipeId)) {
+      return res.status(400).json({
+        success: false,
+        err: `${recipeId} is already a favourite!`,
       });
+    }
 
-      if (!newUser.favorites.includes(req.body.recipeId.toString())) {
-        console.log(
-          `${id}'s favorites do not include ${req.body.recipeId.toString()}`,
-        );
-        return res.status(400).json({
-          success: false,
-          err: `${req.body.recipeId.toString()} is not a favorite!`,
-        });
-      } else {
-        newUser.favorites = newUser.favorites.filter(
-          (el) => el !== req.body.recipeId.toString(),
-        );
-      }
-      newUser.favorites = newUser.favorites.filter((el) => el !== '');
+    const favorites = user.favorites
+      .concat(recipeId)
+      .filter((el) => el !== '');
 
-      const upsertData = newUser.toObject();
+    const updatedDoc = await User.findByIdAndUpdate(
+      user._id,
+      { favorites },
+      { new: true },
+    );
+    return res.status(200).json({ success: true, user: updatedDoc });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err });
+  }
+});
 
-      delete upsertData._id;
+router.patch('/removeFavorite/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    const recipeId = req.body.recipeId.toString();
 
-      try {
-        User.updateOne(
-          { _id: req.params.id },
-          upsertData,
-          { upsert: true },
-          (err, updatedDoc) => {
-            if (err) return res.status(500).send({ error: err });
-            return res.status(200).json({ success: true, user: updatedDoc });
-          },
-        ).catch((err) => {
-          throw err;
-        });
-      } catch (err) {
-        res.status(500).json({ success: false, error: err });
-      }
-    })
-    .catch((err) => {
-      res.status(400).json({ success: false, error: err });
-    });
+    if (!user.favorites.includes(recipeId)) {
+      console.log(
+        `${req.params.id}'s favorites do not include ${recipeId}`,
+      );
+      return res.status(400).json({
+        success: false,
+        err: `${recipeId} is not a favorite!`,
+      });
+    }
+
+    const favorites = user.favorites.filter(
+      (el) => el !== recipeId && el !== '',
+    );
+
+    const updatedDoc = await User.findByIdAndUpdate(
+      user._id,
+      { favorites },
+      { new: true },
+    );
+    return res.status(200).json({ success: true, user: updatedDoc });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err });
+  }
 });
 
 // @route   DELETE api/users/:id
 // @desc    Delete user
 // @access  Public
-router.delete('/:id', (req, res) => {
-  User.findById(req.params.id)
-    .then((user) => {
-      user.remove().then(() => {
-        res.status(200).json({ success: true });
-      });
-    })
-    .catch((err) => {
-      console.log(`ERROR: \n${err}\n`);
-      return res.json({ success: false });
-    });
+router.delete('/:id', async (req, res) => {
+  try {
+    await User.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.log(`ERROR: \n${err}\n`);
+    res.json({ success: false });
+  }
 });
 
 module.exports = router;
