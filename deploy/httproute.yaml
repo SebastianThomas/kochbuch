@@ -1,8 +1,8 @@
 ---
-# kochbuch.homelab.sthomas.ch -> the kochbuch Service, via the shared Traefik
-# Gateway. Runs in PARALLEL to the legacy kochbuch.sthomas.ch (host nginx +
-# docker-compose) until cutover - then add `kochbuch.sthomas.ch` to hostnames
-# and repoint the legacy nginx vhost at the Traefik ClusterIP.
+# kochbuch -> the kochbuch Service, via the shared Traefik Gateway. Traefik is
+# the public edge and terminates TLS (cert-manager gateway certs). Both the
+# .homelab and the bare .sthomas.ch name resolve here; the legacy
+# docker-compose kochbuch.sthomas.ch is retired.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -14,6 +14,7 @@ spec:
       namespace: kube-system
   hostnames:
     - kochbuch.homelab.sthomas.ch
+    - kochbuch.sthomas.ch
   rules:
     - backendRefs:
         - name: kochbuch
