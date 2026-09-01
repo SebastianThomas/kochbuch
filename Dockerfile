@@ -1,25 +1,27 @@
-FROM node AS vue-build
+# --- build the Vue PWA -----------------------------------------------------
+FROM node:24-slim AS vue-build
 WORKDIR /frontend-src
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
 COPY client/ .
-RUN npm install
 RUN npm run build
 
-FROM node AS kochbuch-server
-# RUN apt -y update && apt -y upgrade
+# --- server runtime ------------------------------------------------------
+FROM node:24-slim AS kochbuch-server
 
 ARG NODE_ENV=production
-
 ENV NODE_ENV=$NODE_ENV
-ENV PORT=$PORT
+ENV PORT=5000
 WORKDIR /app
+
+# Install only runtime deps; the server reads its dependencies from the root
+# package.json (there is no server/package.json).
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 COPY server/ ./server
 COPY --from=vue-build /frontend-src/dist/ ./server/public
-COPY ["package.json", "package-lock.json*", "./"]
-# Final setup and installation of node
-RUN cd server && npm install
-EXPOSE $PORT
-# Copy files to container
 
+EXPOSE 5000
 USER node
 CMD ["npm", "start"]

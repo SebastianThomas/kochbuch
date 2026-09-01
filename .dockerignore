@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/.git
+**/.DS_Store
+**/npm-debug.log*
+.env
+.env.*
+.github
+deploy
+docker-compose.yaml
+*.md

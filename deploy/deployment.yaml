@@ -39,6 +39,11 @@ spec:
               valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-private-key } }
             - name: PUSH_SUBJECT
               valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: push-subject } }
+            # SMTP for /api/send (Gmail by default; host/port overridable here)
+            - name: MAIL_USER
+              valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: mail-user } }
+            - name: MAIL_PASS
+              valueFrom: { secretKeyRef: { name: kochbuch-secrets, key: mail-pass } }
           readinessProbe:
             httpGet: { path: /, port: 5000 }
             initialDelaySeconds: 5

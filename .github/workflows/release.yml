@@ -14,16 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Image ref
         run: echo "IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/kochbuch-sebastian:${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -50,6 +50,8 @@ jobs:
             push-public-key=${{ secrets.PUSH_PUBLIC_KEY }}
             push-private-key=${{ secrets.PUSH_PRIVATE_KEY }}
             push-subject=${{ secrets.PUSH_SUBJECT }}
+            mail-user=${{ secrets.MAIL_USER }}
+            mail-pass=${{ secrets.MAIL_PASS }}
 
       - uses: SebastianThomas/homelab-actions/kube-deploy@v1
         with:

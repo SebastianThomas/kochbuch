@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const passport = require('passport');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const items = require('./routes/api/items');
 const users = require('./routes/api/users');

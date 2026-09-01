@@ -18,30 +18,30 @@
   },
   "homepage": "https://github.com/SebastianThomas/kochbuch#readme",
   "dependencies": {
-    "@vue/cli": "^4.3.1",
-    "axios": "^0.19.2",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "crypto": "^1.0.1",
-    "dotenv": "16.0.0",
-    "express": "^4.17.1",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
     "express-validator": "5.3.0",
     "gridfs-stream": "^1.1.1",
-    "method-override": "^3.0.0",
-    "mongodb": "^3.5.6",
-    "mongoose": "^5.9.10",
-    "multer": "^1.4.2",
-    "multer-gridfs-storage": "^4.0.3",
-    "nodemailer": "^6.4.6",
+    "mongodb": "^3.7.4",
+    "mongoose": "^5.13.23",
+    "multer": "1.4.5-lts.2",
+    "multer-gridfs-storage": "^4.2.0",
+    "nodemailer": "^9.1.0",
     "passport": "^0.4.1",
     "passport-local": "^1.0.0",
-    "web-push": "^3.4.4"
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@types/workbox-core": "^5.0.0",
-    "@types/workbox-sw": "^4.3.7",
-    "nodemon": "^2.0.3",
-    "workbox-core": "^7.3.0",
-    "workbox-sw": "^7.3.0"
+    "nodemon": "^3.1.10"
+  },
+  "overrides": {
+    "jwa": ">=2.0.1",
+    "jws": ">=4.0.1",
+    "minimist": ">=1.2.8",
+    "multer-gridfs-storage": {
+      "multer": "$multer"
+    }
   }
 }
